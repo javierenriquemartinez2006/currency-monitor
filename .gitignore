@@ -1,0 +1,45 @@
+# .gitignore
+
+# Enviroment
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*py[cod]
+*$py.class
+*so
+.Python
+venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# Personal
+notes.md
+next_version/
+prompts/
+
+# itself
+.gitignore
