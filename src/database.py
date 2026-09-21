@@ -1,3 +1,5 @@
+# -- database.py --
+
 import sqlite3
 import logging
 from contextlib import contextmanager
@@ -6,6 +8,7 @@ from datetime import datetime
 from typing import Generator
 
 from src.config import Config
+from src.schemas import ExchangeRate
 
 # Database path
 DB_PATH = Path(Config.DB_PATH)
@@ -14,7 +17,6 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # Logger
 logger = logging.getLogger(__name__)
-
 
 
 # Connect to Database using context manager
@@ -52,20 +54,27 @@ def init_database():
         conn.commit()
         logger.info(f'Database initialized at {DB_PATH}')
         
-
 # Insert rate record operation
-def insert_record(base_currency: str, target_currency: str, rate: float, timestamp: datetime):
-    """Insert a single rate record"""
+def record_rate(rate: ExchangeRate) -> int:
+    """Insert a single rate record.
+    
+    Returns:
+        ROWID of the record in rate's table.
+        
+    Raises:
+        sqlite3.IntegrityError: if the record already exists.
+        """
     
     # Format timestamp, and add current time (API only provides date information)
     now = datetime.now()
-    full_timestamp = timestamp.replace(hour=now.hour, minute=now.minute)
-    formatted = full_timestamp.strftime('%Y-%m-%d %H:%M')
+    full_timestamp = rate.timestamp.replace(hour=now.hour, minute=now.minute, second=now.second)
+    formatted = full_timestamp.strftime('%Y-%m-%d %H:%M:%S')
     
     with get_connection() as conn:
-        conn.execute("""
-                     INSERT OR IGNORE INTO exchange_rates
+        cursor = conn.execute("""
+                     INSERT INTO exchange_rates
                      (base_currency, target_currency, rate, timestamp)
                      VALUES (?, ?, ?, ?)
-                     """, (base_currency, target_currency, rate, formatted))
+                     """, (rate.base_currency, rate.target_currency, rate.rate, formatted))
         conn.commit()
+        return cursor.lastrowid
