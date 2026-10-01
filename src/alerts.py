@@ -1,76 +1,43 @@
 # -- alerts.py --
 
-from enum import Enum
-from typing import List, Optional, Tuple
+from typing import Optional
 
 from src.schemas import ExchangeRate, AlertSchema
 from src.config import Config
 
 
-class MatchType(Enum):
-    DIRECT = 'direct'
-    INVERSE = 'inverse'
-    NONE = 'none'
-
-def match_alert(rate: ExchangeRate, alert: AlertSchema):
-    """Classify how rate relates to alert's currency pair."""
+def triggers(rate: ExchangeRate, alert: AlertSchema) -> bool:
+    """Check if a rate triggers an alert (direct match only).
     
-    if rate.base_currency == alert.base_currency and rate.target_currency == alert.target_currency:
-        return MatchType.DIRECT
-    if rate.base_currency == alert.target_currency and rate.target_currency == alert.base_currency:
-        return MatchType.INVERSE
-    return MatchType.NONE
-
-def triggers(rate: float, threshold: float, direction: str) -> bool:
-    """Check if a value crosses a threshold in a given direction."""
-    if direction == 'above':
-        return rate > threshold
-    return rate < threshold
+    Return:
+        True if the alert's pair matches and threshold is crossed"""
     
-def evaluate_alert(rate: ExchangeRate, alert: AlertSchema) -> Optional[float]:
-    """Evaluate a single alert against a rate. 
+    # Discard dismatching pairs
+    if rate.base_currency != alert.base_currency:
+        return False
+    if rate.target_currency != alert.target_currency:
+        return False
     
-    Returns:
-        Effective rate that triggered the alert, or None.
-    """
-    
-    # Verify currency matching for evaluation
-    match_type = match_alert(rate, alert)
-    
-    # Direct match
-    if match_type == MatchType.DIRECT:
-        if triggers(rate.rate, alert.threshold, alert.direction):
-            return rate.rate
-        
-    # Inverse match
-    if match_type == MatchType.INVERSE:
-        effective_rate = 1 / rate.rate
-        if triggers(effective_rate, alert.threshold, alert.direction):
-            return effective_rate
-        
-    # No match or trigger: discard
-    return None
-
-def severity(alert: AlertSchema, effective_rate: float) -> float:
-    """Difference of the effective rate against the threshold"""
     if alert.direction == 'above':
-        return abs(effective_rate - alert.threshold)
-    return abs(alert.threshold - effective_rate)
-
-def evaluate_all_alerts(rate: ExchangeRate) -> List[Tuple[AlertSchema, float]]:
-    """Evaluate all configured alerts against rate.
+        return rate.rate > alert.threshold
+    return rate.rate < alert.threshold
+    
+def evaluate_alerts(rate: ExchangeRate) -> Optional[AlertSchema]:
+    """Evaluate all configured alerts against a single rate.
     
     Returns:
-        List of (alerts, effective_rate) tuples, sorted by severity (highest first).
+        The highest-priority triggered alert, or None if none triggered
     """
+    
     triggered = []
     
+    # Store all triggered alerts
     for alert in Config.CONFIGURED_ALERTS:
-        effective_rate = evaluate_alert(rate, alert)
-        if effective_rate is not None:
-            triggered.append((alert, effective_rate))
+        if triggers(rate, alert):
+            triggered.append(alert)
             
-    # Sort by threshold/rate difference
-    triggered.sort(key=lambda pair: severity(pair[0], pair[1]))
+    # Sort by relative surplus. 
+    triggered.sort(key=lambda alert: abs(rate.rate - alert.threshold) / alert.threshold)
     
-    return triggered
+    highest = triggered[0] if triggered else None
+    return highest
